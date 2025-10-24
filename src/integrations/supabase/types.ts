@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      direct_calls: {
+        Row: {
+          caller_id: string
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          receiver_id: string
+          started_at: string
+          status: Database["public"]["Enums"]["call_status"]
+        }
+        Insert: {
+          caller_id: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          receiver_id: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["call_status"]
+        }
+        Update: {
+          caller_id?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          receiver_id?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["call_status"]
+        }
+        Relationships: []
+      }
+      room_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          id: string
+          invitee_email: string
+          inviter_id: string
+          room_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          invitee_email: string
+          inviter_id: string
+          room_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          invitee_email?: string
+          inviter_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_invitations_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_participants: {
         Row: {
           email: string
@@ -51,6 +116,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          call_type: Database["public"]["Enums"]["call_type"]
           created_at: string | null
           host_id: string
           id: string
@@ -58,6 +124,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          call_type?: Database["public"]["Enums"]["call_type"]
           created_at?: string | null
           host_id: string
           id?: string
@@ -65,6 +132,7 @@ export type Database = {
           name: string
         }
         Update: {
+          call_type?: Database["public"]["Enums"]["call_type"]
           created_at?: string | null
           host_id?: string
           id?: string
@@ -81,7 +149,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      call_status: "ongoing" | "ended" | "missed"
+      call_type: "one_to_one" | "group"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -208,6 +277,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      call_status: ["ongoing", "ended", "missed"],
+      call_type: ["one_to_one", "group"],
+    },
   },
 } as const

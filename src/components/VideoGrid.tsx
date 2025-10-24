@@ -62,7 +62,15 @@ const VideoTile = ({ participant, isLocal, videoRef }: VideoTileProps) => {
   useEffect(() => {
     const video = isLocal ? videoRef?.current : remoteVideoRef.current;
     if (video && participant.stream) {
+      console.log(`Setting up ${isLocal ? 'local' : 'remote'} video stream`);
       video.srcObject = participant.stream;
+      
+      // For remote streams, ensure audio is enabled
+      if (!isLocal) {
+        participant.stream.getAudioTracks().forEach(track => {
+          console.log("Remote audio track in VideoTile:", track.enabled, track.muted);
+        });
+      }
     }
   }, [participant.stream, isLocal, videoRef]);
 

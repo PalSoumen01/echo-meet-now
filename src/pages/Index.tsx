@@ -1,203 +1,270 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Video, Plus, LogOut, Users } from "lucide-react";
-import { User } from "@supabase/supabase-js";
-
-interface Room {
-  id: string;
-  name: string;
-  host_id: string;
-  created_at: string;
-}
+import { Video, Plus, LogOut, Phone, Users } from "lucide-react";
+import CallHistory from "@/components/CallHistory";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [roomId, setRoomId] = useState("");
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [receiverEmail, setReceiverEmail] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate("/auth");
         return;
       }
       setUser(session.user);
-      loadRooms();
-    });
+      fetchRooms();
+    };
+
+    checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
+      if (session) {
         setUser(session.user);
-        loadRooms();
+        fetchRooms();
+      } else {
+        navigate("/auth");
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const loadRooms = async () => {
-    const { data, error } = await supabase
+  const fetchRooms = async () => {
+    const { data } = await supabase
       .from("rooms")
       .select("*")
       .eq("is_active", true)
+      .eq("call_type", "group")
       .order("created_at", { ascending: false });
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Could not load rooms",
-        variant: "destructive",
-      });
-    } else {
-      setRooms(data || []);
+    if (data) {
+      setRooms(data);
     }
   };
 
-  const createRoom = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRoomName.trim() || !user) return;
+  const createRoom = async () => {
+    if (!roomName.trim()) {
+      toast({
+        title: "Room name required",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    setLoading(true);
     const { data, error } = await supabase
       .from("rooms")
-      .insert({
-        name: newRoomName,
+      .insert({ 
+        name: roomName, 
         host_id: user.id,
+        call_type: "group",
       })
       .select()
       .single();
 
-    setLoading(false);
+    if (error) {
+      toast({
+        title: "Error creating room",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    navigate(`/room/${data.id}`);
+  };
+
+  const startDirectCall = async () => {
+    if (!receiverEmail.trim()) {
+      toast({
+        title: "Email required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (receiverEmail === user.email) {
+      toast({
+        title: "Cannot call yourself",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("direct_calls")
+      .insert({
+        caller_id: user.id,
+        receiver_id: receiverEmail,
+      })
+      .select()
+      .single();
 
     if (error) {
       toast({
-        title: "Error",
-        description: "Could not create room",
+        title: "Error starting call",
+        description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Room created!",
-        description: "Joining your room...",
-      });
-      navigate(`/room/${data.id}`);
+      return;
     }
+
+    navigate(`/direct-call/${data.id}`);
   };
 
-  const joinRoom = (roomId: string) => {
+  const joinRoom = () => {
+    if (!roomId.trim()) {
+      toast({
+        title: "Room ID required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     navigate(`/room/${roomId}`);
   };
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     await supabase.auth.signOut();
+    navigate("/auth");
   };
 
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-primary to-accent">
-              <Video className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                VideoCall Pro
-              </h1>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
-            </div>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+              VideoCall Pro
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Secure video calling platform
+            </p>
           </div>
-          <Button variant="secondary" onClick={handleSignOut}>
+          <Button variant="outline" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
+            Logout
           </Button>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="md:col-span-1 border-border/50 shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                Create Room
-              </CardTitle>
-              <CardDescription>Start a new video call</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={createRoom} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="roomName">Room Name</Label>
-                  <Input
-                    id="roomName"
-                    placeholder="My Video Room"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    required
-                    className="bg-secondary/50 border-border"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                  disabled={loading}
-                >
-                  {loading ? "Creating..." : "Create Room"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="direct" className="mb-8">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+            <TabsTrigger value="direct">
+              <Phone className="w-4 h-4 mr-2" />
+              Direct Call
+            </TabsTrigger>
+            <TabsTrigger value="group">
+              <Users className="w-4 h-4 mr-2" />
+              Group Call
+            </TabsTrigger>
+          </TabsList>
 
-          <Card className="md:col-span-2 border-border/50 shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Available Rooms
-              </CardTitle>
-              <CardDescription>Join an existing video call</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {rooms.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No active rooms. Create one to get started!
+          <TabsContent value="direct" className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="p-6 bg-card border-border">
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Phone className="w-6 h-6" />
+                  Start Direct Call
+                </h2>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Enter recipient's email"
+                    value={receiverEmail}
+                    onChange={(e) => setReceiverEmail(e.target.value)}
+                    className="bg-background border-border"
+                    type="email"
+                  />
+                  <Button onClick={startDirectCall} className="w-full bg-gradient-primary hover:opacity-90">
+                    Start Call
+                  </Button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {rooms.map((room) => (
+              </Card>
+
+              <CallHistory />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="group" className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="p-6 bg-card border-border">
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Plus className="w-6 h-6" />
+                  Create Group Room
+                </h2>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Enter room name"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    className="bg-background border-border"
+                  />
+                  <Button onClick={createRoom} className="w-full bg-gradient-primary hover:opacity-90">
+                    Create Room
+                  </Button>
+                </div>
+              </Card>
+
+              <Card className="p-6 bg-card border-border">
+                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                  <Video className="w-6 h-6" />
+                  Join Room
+                </h2>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Enter room ID or link"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    className="bg-background border-border"
+                  />
+                  <Button onClick={joinRoom} variant="outline" className="w-full">
+                    Join Room
+                  </Button>
+                </div>
+              </Card>
+            </div>
+
+            <Card className="p-6 bg-card border-border">
+              <h2 className="text-2xl font-semibold mb-4">Available Rooms</h2>
+              <div className="grid gap-4">
+                {rooms.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No active rooms available
+                  </p>
+                ) : (
+                  rooms.map((room) => (
                     <div
                       key={room.id}
-                      className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                      className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
                     >
                       <div>
                         <h3 className="font-semibold">{room.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Created {new Date(room.created_at).toLocaleString()}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Room ID: {room.id}</p>
                       </div>
-                      <Button
-                        onClick={() => joinRoom(room.id)}
-                        className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                      >
+                      <Button onClick={() => navigate(`/room/${room.id}`)}>
                         Join
                       </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

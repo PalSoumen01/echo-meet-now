@@ -44,12 +44,23 @@ const Room = () => {
       
       if (room) setRoomName(room.name);
 
-      // Get local media
+      // Get local media with explicit audio settings
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
+        
+        console.log("Local stream tracks:", stream.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          muted: t.muted
+        })));
+        
         setLocalStream(stream);
 
         // Join room in database
@@ -144,17 +155,31 @@ const Room = () => {
 
   const createPeerConnection = (peerId: string, createOffer: boolean) => {
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
     });
 
+    // Add all tracks including audio with explicit logging
     localStream?.getTracks().forEach((track) => {
+      console.log("Adding track to peer:", track.kind, "enabled:", track.enabled);
       pc.addTrack(track, localStream);
     });
 
     pc.ontrack = (event) => {
+      console.log("Received remote track:", event.track.kind, "from peer:", peerId);
+      const [stream] = event.streams;
+      
+      // Ensure audio tracks are enabled
+      stream.getAudioTracks().forEach(track => {
+        console.log("Remote audio track enabled:", track.enabled);
+        track.enabled = true;
+      });
+      
       setParticipants((prev) =>
         prev.map((p) =>
-          p.id === peerId ? { ...p, stream: event.streams[0] } : p
+          p.id === peerId ? { ...p, stream } : p
         )
       );
     };
